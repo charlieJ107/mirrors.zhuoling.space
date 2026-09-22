@@ -1,0 +1,30 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	// THROWAWAY spike worker (issue #1, M0). Separate from the product worker:
+	// run with `npx wrangler dev --config spikes/m0/wrangler.jsonc`.
+	"name": "m0-ingest-spike",
+	"main": "./src/worker.ts",
+	"compatibility_date": "2026-09-15",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"logs": {
+			"enabled": true
+		}
+	},
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "m0-ingest-spike",
+			"preview_bucket_name": "m0-ingest-spike"
+		}
+	],
+	"workflows": [
+		{
+			"name": "m0-ingest",
+			"binding": "INGEST",
+			"class_name": "IngestWorkflow"
+		}
+	]
+}
