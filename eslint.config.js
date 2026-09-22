@@ -8,6 +8,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores([
     'dist',
+    '**/.wrangler',
     'worker-configuration.d.ts',
     'src/client/components/ui/**',
     'src/client/components/ai-elements/**',

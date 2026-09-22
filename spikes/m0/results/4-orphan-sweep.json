@@ -1,0 +1,20 @@
+{
+  "pass": true,
+  "statusAfterTerminate": "terminated",
+  "markersBefore": 2,
+  "aborted": [
+    {
+      "key": "test/manual-orphan.bin",
+      "uploadId": "LETyixAqH4iHti9BfJRwOsatSrsnesc1bGcZA9FD4DQEjSYipZgF87R-cVQZiDH1pUicD0eCg0quK_-uNJLEiZuREGWs3udl7EpOR3ZNSVxyYpKO25RX0_fSMSkia-BykPRdsYEvFjR9uYtbGTY27phjbUC3onbwjLOqW9ikvMI",
+      "initiatedAt": 1790098363750
+    },
+    {
+      "key": "test/killed.bin",
+      "uploadId": "bb19TRPPZKMdyofpG2GDU3bQa7-2RJ5fXe5GVDlQA505cWxAz4FN4uRk3jjfLg48YLaIi6mOX3aZ1hAh1c8GzUA0tA3UtFwQGGtwcn0qYxuzEbppwR3AbrudRS2Z-CerjD8JOzv0j51IClUmg0rv9K5iUhMuBeZ_RK8w5yBkEEg",
+      "initiatedAt": 1790098363833
+    }
+  ],
+  "sweepErrors": [],
+  "markersAfter": 0,
+  "killedObjectPresent": false
+}

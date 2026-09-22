@@ -41,8 +41,12 @@ app.post("/instances/:id/terminate", async (c) => {
   return c.json({ ok: true });
 });
 
-app.get("/objects/:key", async (c) => {
-  const obj = await c.env.BUCKET.get(c.req.param("key"));
+function objectKey(c: { req: { path: string } }): string {
+  return c.req.path.replace(/^\/objects\//, "");
+}
+
+app.get("/objects/*", async (c) => {
+  const obj = await c.env.BUCKET.get(objectKey(c));
   if (!obj) return c.json({ error: "not found" }, 404);
   return new Response(obj.body, {
     headers: {
@@ -52,8 +56,8 @@ app.get("/objects/:key", async (c) => {
   });
 });
 
-app.on("HEAD", "/objects/:key", async (c) => {
-  const obj = await c.env.BUCKET.head(c.req.param("key"));
+app.on("HEAD", "/objects/*", async (c) => {
+  const obj = await c.env.BUCKET.head(objectKey(c));
   if (!obj) return new Response(null, { status: 404 });
   return new Response(null, {
     headers: { "content-length": String(obj.size), etag: obj.httpEtag },
