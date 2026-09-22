@@ -13,6 +13,7 @@
     "build:cf": "tsc -b && vite build",
     "build:node": "tsc -b && vite build --config vite.config.client.ts && vite build --config vite.config.node.ts",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview",
     "start:node": "node dist/node/entry.node.js",
     "docker:build": "docker build -t cf-react-hono-template-node .",

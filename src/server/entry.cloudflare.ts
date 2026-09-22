@@ -20,3 +20,10 @@ export default {
     return handler.fetch(req, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
+
+export {
+  IngestWorkflow,
+  VerifyWorkflow,
+  TierWorkflow,
+  GcWorkflow,
+} from "@server/workflows";
