@@ -1,0 +1,39 @@
+{
+  "pass": true,
+  "instanceStatus": "complete",
+  "output": {
+    "ok": true,
+    "key": "test/norange.bin",
+    "path": "sequential",
+    "size": 209715200,
+    "sha256": "bf00ae5fc462b62aa27f47cbcf9263c91254ab46b006204ebda30529a42d49f8",
+    "hashedBytes": 209715200,
+    "parts": 7,
+    "upstreamEtag": "\"a-bf00ae5fc462b62aa27f47cbcf9263c9\"",
+    "durationMs": 24917,
+    "r2Ops": {
+      "createMultipartUpload": 1,
+      "uploadPart": 7,
+      "complete": 1,
+      "get": 1,
+      "registryPut": 1,
+      "registryDelete": 1
+    }
+  },
+  "verify": {
+    "status": 200,
+    "sha256": "bf00ae5fc462b62aa27f47cbcf9263c91254ab46b006204ebda30529a42d49f8",
+    "bytes": 209715200
+  },
+  "wallClockMs": 25147,
+  "upstreamRequests": {
+    "head": 2,
+    "get200": 1,
+    "get206": 0
+  },
+  "memory": {
+    "baselineWorkerdRssBytes": 480456704,
+    "peakWorkerdRssBytes": 578772992,
+    "samples": 82
+  }
+}

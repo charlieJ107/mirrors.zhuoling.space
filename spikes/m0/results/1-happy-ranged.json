@@ -1,0 +1,40 @@
+{
+  "pass": true,
+  "instanceStatus": "complete",
+  "output": {
+    "ok": true,
+    "key": "test/happy.bin",
+    "path": "ranged",
+    "size": 209715200,
+    "sha256": "bf00ae5fc462b62aa27f47cbcf9263c91254ab46b006204ebda30529a42d49f8",
+    "hashedBytes": 209715200,
+    "parts": 4,
+    "upstreamEtag": "\"a-bf00ae5fc462b62aa27f47cbcf9263c9\"",
+    "durationMs": 36962,
+    "r2Ops": {
+      "createMultipartUpload": 1,
+      "uploadPart": 4,
+      "complete": 1,
+      "get": 1,
+      "registryPut": 1,
+      "registryDelete": 1
+    }
+  },
+  "verify": {
+    "status": 200,
+    "sha256": "bf00ae5fc462b62aa27f47cbcf9263c91254ab46b006204ebda30529a42d49f8",
+    "bytes": 209715200
+  },
+  "wallClockMs": 37274,
+  "upstreamRequests": {
+    "head": 1,
+    "get206": 4,
+    "get200": 0
+  },
+  "upstreamBytesServed": 209715200,
+  "memory": {
+    "baselineWorkerdRssBytes": 186998784,
+    "peakWorkerdRssBytes": 462331904,
+    "samples": 121
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "sizeBytes": 209715200,
+  "scenarios": {
+    "1-happy-ranged": true,
+    "2-etag-change-abort": true,
+    "3-no-range-sequential": true,
+    "4-orphan-sweep": true
+  },
+  "allPass": true
+}

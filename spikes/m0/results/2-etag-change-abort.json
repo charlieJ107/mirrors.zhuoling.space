@@ -1,0 +1,43 @@
+{
+  "pass": true,
+  "instanceStatus": "errored",
+  "error": {
+    "name": "WorkflowFatalError",
+    "message": "The execution of the Workflow instance was terminated, as a step threw an NonRetryableError and it was not handled"
+  },
+  "objectPresent": false,
+  "registryMarkersAfter": 0,
+  "ifRangeTriggeredFullBody": true,
+  "upstreamRequests": [
+    {
+      "t": 1790098306468,
+      "method": "HEAD",
+      "range": null,
+      "ifRange": null,
+      "status": 200
+    },
+    {
+      "t": 1790098306499,
+      "method": "GET",
+      "range": "bytes=0-67108863",
+      "ifRange": "\"a-bf00ae5fc462b62aa27f47cbcf9263c9\"",
+      "status": 206
+    },
+    {
+      "t": 1790098310483,
+      "method": "GET",
+      "range": "bytes=67108864-134217727",
+      "ifRange": "\"a-bf00ae5fc462b62aa27f47cbcf9263c9\"",
+      "status": 206
+    },
+    {
+      "t": 1790098314484,
+      "method": "GET",
+      "range": "bytes=134217728-201326591",
+      "ifRange": "\"a-bf00ae5fc462b62aa27f47cbcf9263c9\"",
+      "status": 200
+    }
+  ],
+  "upstreamBytesServed": 135266304,
+  "note": "\"a-bf00ae5fc462b62aa27f47cbcf9263c9\" rotated to \"b-c23583405583e5b32f3c139d8c86acfd\" mid-transfer"
+}
