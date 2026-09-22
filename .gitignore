@@ -44,3 +44,5 @@ schema.sql
 .agents
 CLAUDE.md
 AGENTS.md
+# Kimi Code project-local machine-specific settings
+.kimi-code/local.toml
