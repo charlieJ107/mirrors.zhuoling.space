@@ -1,0 +1,35 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "cf-react-hono-template",
+	"main": "./src/server/entry.cloudflare.ts",
+	"compatibility_date": "2026-09-15",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		},
+		"traces": {
+			"enabled": true
+		}
+	},
+	"upload_source_maps": true,
+	"assets": {
+		"not_found_handling": "single-page-application",
+		"binding": "ASSETS",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "cf-react-hono-template",
+			// Replace with the id returned by `npx wrangler d1 create cf-react-hono-template`.
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "migrations/d1"
+		}
+	]
+}

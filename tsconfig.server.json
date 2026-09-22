@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo",
+    "target": "ESNext",
+    "lib": [
+      "ESNext"
+    ],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@client/*": [
+        "./src/client/*"
+      ],
+      "@server/*": [
+        "./src/server/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ]
+    },
+  },
+  "include": [
+    "src/server",
+    "src/shared",
+    "worker-configuration.d.ts"
+  ]
+}

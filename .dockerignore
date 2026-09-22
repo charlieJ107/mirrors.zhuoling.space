@@ -1,0 +1,10 @@
+node_modules
+dist
+.wrangler
+.git
+.env
+.env.*
+!.env.example
+*.log
+.auth-schema.sqlite
+schema.sql

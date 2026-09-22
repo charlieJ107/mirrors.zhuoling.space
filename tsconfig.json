@@ -1,0 +1,23 @@
+{
+  "files": [],
+  "compilerOptions": {
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@client/*": [
+        "./src/client/*"
+      ],
+      "@server/*": [
+        "./src/server/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ]
+    }
+  },
+  "references": [
+    { "path": "./tsconfig.client.json" },
+    { "path": "./tsconfig.server.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
