@@ -1,0 +1,50 @@
+{
+  "scenario": "5-remote-ubuntu-iso",
+  "date": "2026-09-22",
+  "account": "4efaeb4e007a1ba8a9a8cad3284d4e31",
+  "upstream": "https://releases.ubuntu.com/24.04.5.1/ubuntu-24.04.5.1-desktop-amd64.iso",
+  "expectedSha256": "4da4a0c9035da8e68a59a838674f403f0a54472c78a83b4fb7f78d03588f85a7",
+  "sizeBytes": 6250332160,
+  "parts": 94,
+  "partSizeBytes": 67108864,
+  "run1": {
+    "config": "default cpu_ms (30s/step)",
+    "outcome": "errored at finalize step: Worker exceeded CPU time limit",
+    "downloadWallClockApproxSec": 3720,
+    "bytesIntegrity": "PASS - object downloaded back via worker and sha256sum matched official SHA256SUMS"
+  },
+  "run2": {
+    "config": "limits.cpu_ms=300000, spurious-200-with-matching-etag treated as retryable",
+    "instanceId": "cf_f99b5e3f0b54d7c9ec5ffff008c3c012308c7fb9a7a3a64352044de2aef162a3",
+    "outcome": "complete",
+    "durationMs": 461800,
+    "workflowSha256": "4da4a0c9035da8e68a59a838674f403f0a54472c78a83b4fb7f78d03588f85a7",
+    "sha256MatchesOfficial": true,
+    "r2Ops": {
+      "createMultipartUpload": 1,
+      "uploadPart": 94,
+      "complete": 1,
+      "get": 1,
+      "registryPut": 1,
+      "registryDelete": 1
+    },
+    "approxSubrequests": 200
+  },
+  "rangeCheckFromWorker": {
+    "endpoint": "/diag/range-check",
+    "batches": 3,
+    "n": 20,
+    "eachBatch": { "200_with_matching_etag": 1, "206": 19 },
+    "conclusion": "~5% of edge fetches to releases.ubuntu.com ignore Range despite matching If-Range etag; must retry, not abort"
+  },
+  "orphanSweepRemote": {
+    "terminatedInstanceKey": "iso/terminated2.iso",
+    "manualOrphanKey": "test/remote-manual-orphan.bin",
+    "swept": true,
+    "prefixFilteringSafeAgainstRunningIngest": true,
+    "bucketListEmptyAtCleanup": true
+  },
+  "s3CrossCheck": "not executed - needs an R2 API token (dashboard); wrangler OAuth token cannot call S3 API or workflows management API",
+  "toolingAnomaly": "wrangler r2 object delete reported success 3x but object persisted; R2 binding bucket.delete worked immediately",
+  "cleanup": "worker m0-ingest-spike deleted; bucket m0-spike-test deleted (empty at deletion); local testdata removed"
+}

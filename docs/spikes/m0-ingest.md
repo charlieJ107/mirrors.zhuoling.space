@@ -80,13 +80,80 @@
 7. 本地 `__LOCAL_DEV_STEP_OUTPUTS` 字段会在实例 status 里暴露每个 step 的返回
    值，调试 Workflows 很有用（仅本地）。
 
-## 本地未覆盖 / 待远程验证
+## 远程实跑（2026-09-22，真实 Cloudflare + releases.ubuntu.com）
 
-- 真实 ~6GB 尺度：96 分片的 wall-clock、单步 p50/p95、subrequest 计量页面读数、
-  CPU 时间（验证"流式几乎不耗 CPU"）、finalize 流式 sha256 在真实 workerd 的吞吐。
-- 128MB isolate 内存硬约束下的 sequential 路径（本地不强制）。
-- S3 API ListMultipartUploads 与 registry marker 清扫的交叉验证。
-- bucket 7 天 lifecycle 自动 abort 兜底（本地不可验）。
-- 与官方 `SHA256SUMS` 的比对（真实 ISO）。
+对象：`ubuntu-24.04.5.1-desktop-amd64.iso`，6,250,332,160 字节（5.82 GiB），
+94 个 64MiB 分片。官方 [SHA256SUMS](https://releases.ubuntu.com/24.04.5.1/SHA256SUMS)：
+`4da4a0c9035da8e68a59a838674f403f0a54472c78a83b4fb7f78d03588f85a7`。
+环境：worker `m0-ingest-spike`（workers.dev），bucket `m0-spike-test`（**均已删除**）。
 
-步骤见 `spikes/m0/run-remote.md`。
+### Run 1（默认配置）：字节全对，finalize 步 CPU 超限
+
+- 94 分片全部抓取成功（wall ~62 min，平均仅 ~1.7MB/s——上游到该边缘节点很慢），
+  multipart complete 成功，对象落桶。
+- **finalize（流式 SHA-256）步两次尝试均以 "Worker exceeded CPU time limit" 失败**
+  （默认 30s CPU/步）。本地 workerd 不强制 CPU 上限，所以本地验证没暴露这一点。
+- 独立验证：把桶内对象经 worker 完整下载回本地，`sha256sum` = 官方值 ✅。
+  **结论：字节路径（Range 分片 → multipart → R2）完全正确，仅哈希步超 CPU。**
+
+### Run 2（`limits.cpu_ms=300000` + spurious-200 重试修正）：全绿
+
+- 实例 `complete`，wall-clock **461.8s**（~14MB/s；与 Run 1 差 8 倍 → 上游/边缘
+  吞吐方差极大，产品侧不要对 wall-clock 设硬预期）。
+- workflow finalize 自算 SHA-256 = 官方值 ✅（hashedBytes = 6,250,332,160）。
+- R2 binding 操作恰好 **100 次**（1 create + 94 uploadPart + 1 complete + 1 get
+  + 2 registry marker）；上游 fetch ≥95 次（1 HEAD + 94 GET + spurious 重试）→
+  全实例 subrequest ≈ **200，为默认上限 10,000 的 2%**；步数 ~99 ≪ 25,000。
+- 观测到实例状态 `waiting` = 步骤重试退避（spurious-200 重试时被看到）。
+
+### 平台意外（相对本地 workerd，全部回填架构决策）
+
+1. **默认 30s CPU/步不够对 6.25GB 流式算 SHA-256**（node:crypto）。产品侧选项：
+   (a) Worker 显式 `"limits": {"cpu_ms": 300000}`（Paid 上限 5 min，spike 已验证
+   可行）；(b) 把哈希摊进各 part 步做增量哈希——node:crypto 不能导出中间状态，
+   需纯 TS 实现 SHA-256（可序列化 state）或 (c) 信任 multipart + 抽查。
+   **建议 (a)，成本为零。**
+2. **真实上游会"无视 Range 但文件没变"**：releases.ubuntu.com 约 **5%** 的请求对
+   Range+If-Range 回 200 全量而 ETag 与 probe 完全一致（worker 侧
+   `/diag/range-check` 三次 N=20 均恰为 1×200 + 19×206；本机直连 9/9 全 206——
+   是边缘→源的多后端行为）。若按原设计把任何 200 视为"上游已变"并 abort，
+   真实世界会大量误杀。已改为：**200 且 ETag 一致 → 可重试错误；ETag 变化 →
+   NonRetryableError + abort**。§2.6 的失败模式表需要吸收这一层。
+3. wrangler OAuth token **无 Workflows 管理 API 权限**（`workflows instances
+   describe` 401，code 10000）；实例状态只能走 Worker 内 binding 或 Dashboard。
+   产品控制面查询实例状态必须走 binding（spike 的 `/instances/:id` 已验证）。
+4. **`wrangler r2 object delete` 报告 "Delete complete" 但对象实际未删除**
+   （重复 3 次；binding `bucket.delete` 立即生效）。疑为 wrangler 4.136.2 的
+   bug 或权限静默降级；产品代码用 binding 不受影响，运维脚本需注意复核。
+
+### 远程孤儿清理（M0 验收 4 的真实平台复验）
+
+- `terminate()` 真实运行中实例 → 状态 `terminated`，错误路径不执行，registry
+  marker 残留 → sweeper 按 `keyPrefix` 精确 abort（同时验证了 prefix 过滤不误伤
+  并行运行中的主 ingest）；手工孤儿 MPU（含 junk part）同法清理。
+- 最终 `bucket.list()` 为空 → bucket 成功删除（R2 不允许删非空桶，此即净桶证明）。
+
+### S3 ListMultipartUploads 交叉验证：未执行 + 产品建议
+
+wrangler OAuth token 无法调 S3 兼容 API（需要单独创建 R2 API token，属账户级
+敏感操作，未自行创建；本机也无 aws CLI）。**产品建议：清扫器以 registry marker
+（或 D1 jobs 表）为唯一运行时依赖**——纯 binding、Worker 内闭环、无需额外凭据；
+S3 ListMultipartUploads 仅作运维审计工具（token 由 maintainer 在 Dashboard 按需
+签发）。registry 方案的固有缺口（CreateMultipartUpload 成功与 marker 写入之间的
+崩溃窗口会产生不可见孤儿）由 bucket 默认 7 天 lifecycle 自动 abort 兜底，可接受。
+
+### M0 验收对照（全部 ✅）
+
+1. ✅ 真实 ~6GB ISO 经 Workflows + multipart 进 R2，SHA-256 与官方 SHA256SUMS
+   一致（双重证据：Run 1 对象本地下载复算 + Run 2 workflow finalize 自算）。
+2. ✅ 中途 ETag 变化 → abort、无残留（本地 mock 精确验证；远程观察到的 200 为
+   spurious，已区分处理——见意外 #2）。
+3. ✅ 无 Range 上游顺序路径（本地 200MiB 验证内存有界；远程未重复，同码路径）。
+4. ✅ 中断清理（本地 terminate + 远程 terminate 各一次，sweeper 均生效）。
+5. ✅ 本文件记录 wall-clock / subrequest / 步数 / CPU 边界。
+
+### 清理状态
+
+worker `m0-ingest-spike` 已 `wrangler delete`；bucket `m0-spike-test` 已删除
+（删前 list 为空）；本地 `spikes/m0/testdata/`（含 6GB 下载件）与 `.wrangler`
+本地状态已删除。账户侧无遗留存储/计费项。

@@ -206,9 +206,22 @@ export class IngestWorkflow extends WorkflowEntrypoint<SpikeEnv, IngestParams> {
 
     const res = await fetch(url, { headers });
     if (res.status === 200) {
+      const gotEtag = res.headers.get("etag");
+      const gotLastMod = res.headers.get("last-modified");
       await res.body?.cancel();
+      if (probe.etag && gotEtag && gotEtag === probe.etag) {
+        // Range was ignored although the validator still matches — observed
+        // on the real platform against releases.ubuntu.com (some origin
+        // backends/routes answer 200 to Range+If-Range). The file has NOT
+        // changed; retry so we can land on a well-behaved backend.
+        throw new Error(
+          `range ignored on part ${part.partNumber} (200 with matching etag ${gotEtag}); retrying`,
+        );
+      }
       throw new NonRetryableError(
-        `upstream changed mid-transfer (If-Range triggered a 200 on part ${part.partNumber})`,
+        `upstream changed mid-transfer (If-Range got 200 on part ${part.partNumber}; ` +
+          `probe etag=${probe.etag} lm=${probe.lastModified}; ` +
+          `response etag=${gotEtag} lm=${gotLastMod})`,
       );
     }
     if (res.status !== 206 || !res.body) {
