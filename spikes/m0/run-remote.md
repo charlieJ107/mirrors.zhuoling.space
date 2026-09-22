@@ -15,12 +15,30 @@ ListMultipartUploads）。
 npm ci
 cd spikes/m0
 
-# 1) 创建测试桶（不要用 robot-apt / 任何生产桶）
-npx wrangler r2 bucket create m0-ingest-spike
+# 1) 创建测试桶（不要用 robot-apt / 任何生产桶；实跑用的是 m0-spike-test）
+npx wrangler r2 bucket create m0-spike-test
+```
 
+> **实跑偏差记录（2026-09-22）**——以下为真实平台与手册原版假设的差异，
+> 详细数据见 `docs/spikes/m0-ingest.md`：
+>
+> 1. **`limits.cpu_ms` 必须调高**：默认 30s/步 的 CPU 上限不够 finalize 步对
+>    6.25GB 流式算 SHA-256（实例在 finalize 阶段以 "Worker exceeded CPU time
+>    limit" 失败）。`spikes/m0/wrangler.jsonc` 已加 `"limits": {"cpu_ms": 300000}`。
+> 2. **spurious 200 必须重试而非判死**：releases.ubuntu.com 有约 5% 的请求对
+>    Range+If-Range 回 200 但 ETag 未变（多后端行为）。分片步骤已改为
+>    "200 且 ETag 一致 → 可重试错误；ETag 变化 → NonRetryableError"。
+> 3. `wrangler workflows instances describe/list` 在 wrangler OAuth token 下
+>    **401（code 10000）**，token scope 不含 Workflows 管理 API；实例状态只能走
+>    Worker 内 binding（本 spike 的 `/instances/:id`）或 Dashboard。
+> 4. S3 API ListMultipartUploads 交叉验证**仍需 R2 API token**（Dashboard →
+>    R2 → Manage R2 API Tokens），wrangler OAuth 不能替代，本机无 aws CLI/凭据。
+>    见结果文档"本地未覆盖/远程待办"节的结论与建议。
+
+```bash
 # 2) 本地生成预期 SHA-256（任选其一）
 #    直接下载官方校验和：
-curl -LO https://releases.ubuntu.com/24.04.3/SHA256SUMS   # 以当日实际版本为准
+curl -LO https://releases.ubuntu.com/24.04.5.1/SHA256SUMS
 grep desktop SHA256SUMS
 ```
 
@@ -28,7 +46,7 @@ grep desktop SHA256SUMS
 镜像站对比延迟）：
 
 ```
-ISO_URL=https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-desktop-amd64.iso
+ISO_URL=https://releases.ubuntu.com/24.04.5.1/ubuntu-24.04.5.1-desktop-amd64.iso
 ```
 
 ## 1. 部署 spike worker
@@ -69,7 +87,7 @@ curl $WORKER/instances/<instanceId>
    `SHA256SUMS` 本身或 daily-live 镜像）跑 ingest，或先用场景 A 的 key 重跑、
    中途人工在 R2 侧删除对象观察失败路径。
    关键验收不变：实例 errored；`curl -I $WORKER/objects/<key>` 为 404；
-   `aws s3api list-multipart-uploads --bucket m0-ingest-spike --endpoint-url
+   `aws s3api list-multipart-uploads --bucket m0-spike-test --endpoint-url
    https://<accountid>.r2.cloudflarestorage.com` 输出为空。
 
 ## 4. 场景 C：无 Range 上游（M0 验收 3）
@@ -89,7 +107,7 @@ curl -X POST $WORKER/instances/<id>/terminate
 # 清扫器（registry-marker 路径，binding 没有 listMultipartUploads —— 见结果文档）
 curl -X POST $WORKER/sweep -H 'content-type: application/json' -d '{"olderThanMs":0}'
 # 交叉验证（S3 API，需要 R2 API token）：
-aws s3api list-multipart-uploads --bucket m0-ingest-spike \
+aws s3api list-multipart-uploads --bucket m0-spike-test \
   --endpoint-url https://<accountid>.r2.cloudflarestorage.com
 ```
 
@@ -107,8 +125,8 @@ aws s3api list-multipart-uploads --bucket m0-ingest-spike \
 ## 7. 清理
 
 ```bash
-npx wrangler r2 object delete m0-ingest-spike/iso/ubuntu-desktop-amd64.iso --config spikes/m0/wrangler.jsonc
+npx wrangler r2 object delete m0-spike-test/iso/ubuntu-24.04.5.1-desktop-amd64.iso --config spikes/m0/wrangler.jsonc
 npx wrangler delete --config spikes/m0/wrangler.jsonc
 # 桶可留作后续 spike 使用，或一并删除：
-npx wrangler r2 bucket delete m0-ingest-spike
+npx wrangler r2 bucket delete m0-spike-test
 ```

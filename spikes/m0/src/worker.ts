@@ -101,5 +101,49 @@ app.post("/sweep", async (c) => {
   return c.json(result);
 });
 
+// Diagnostics: list objects (cleanup verification).
+app.get("/diag/list", async (c) => {
+  const listed = await c.env.BUCKET.list({ limit: 100 });
+  return c.json({
+    truncated: listed.truncated,
+    objects: listed.objects.map((o) => ({ key: o.key, size: o.size })),
+  });
+});
+
+// Diagnostics: delete an object (cleanup).
+app.post("/diag/delete", async (c) => {
+  const { key } = (await c.req.json()) as { key: string };
+  await c.env.BUCKET.delete(key);
+  const after = await c.env.BUCKET.head(key);
+  return c.json({ deleted: key, stillPresent: after !== null });
+});
+
+// Diagnostics: fire N Range+If-Range requests at an upstream from this
+// worker's fetch context and report the status-code/etag distribution.
+// (Spike-only; host allowlisted to avoid an open proxy.)
+app.get("/diag/range-check", async (c) => {
+  const url = c.req.query("url") ?? "";
+  if (!url.startsWith("https://releases.ubuntu.com/")) {
+    return c.json({ error: "host not allowlisted" }, 400);
+  }
+  const n = Math.min(Number(c.req.query("n") ?? "10"), 50);
+  const head = await fetch(url, { method: "HEAD" });
+  const etag = head.headers.get("etag");
+  const outcomes: { status: number; etag: string | null }[] = [];
+  for (let i = 0; i < n; i++) {
+    const res = await fetch(url, {
+      headers: { Range: "bytes=0-1023", ...(etag ? { "If-Range": etag } : {}) },
+    });
+    outcomes.push({ status: res.status, etag: res.headers.get("etag") });
+    await res.body?.cancel();
+  }
+  const summary: Record<string, number> = {};
+  for (const o of outcomes) {
+    summary[`${o.status} etag=${o.etag}`] =
+      (summary[`${o.status} etag=${o.etag}`] ?? 0) + 1;
+  }
+  return c.json({ probeEtag: etag, n, summary });
+});
+
 export default app;
 export { IngestWorkflow };
