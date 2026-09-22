@@ -1,5 +1,6 @@
 import { casKey } from "@server/lib/storage/keys";
 import { newBlobId } from "@server/lib/storage/ids";
+import { withKnownLength } from "./tee";
 import type { R2BucketLike } from "./r2-types";
 import type {
   BlobsTable,
@@ -114,5 +115,6 @@ export async function copyObject(bucket: R2BucketLike, fromKey: string, toKey: s
   if (!source) {
     throw new Error(`copyObject: source object missing: ${fromKey}`);
   }
-  await bucket.put(toKey, source.body);
+  // workerd rejects unknown-length streams for PUT; we know the size.
+  await bucket.put(toKey, withKnownLength(source.body, source.size));
 }

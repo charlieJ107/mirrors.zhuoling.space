@@ -48,7 +48,9 @@ export function teeUpload(source: ReadableStream<Uint8Array>, options: TeeUpload
 
   const reader = source.getReader();
   const hasher = new StreamingSha256();
-  const uploadStream = new TransformStream<Uint8Array, Uint8Array>();
+  // workerd requires a known-length stream for single PUTs (multipart parts
+  // are buffered Uint8Arrays, so only the single-PUT sink needs this).
+  const uploadStream = createUploadSink(useMultipart ? null : options.contentLength);
   const uploadWriter = uploadStream.writable.getWriter();
 
   let size = 0;
@@ -126,8 +128,38 @@ export function teeUpload(source: ReadableStream<Uint8Array>, options: TeeUpload
   return { clientStream, done };
 }
 
-async function uploadMultipart(
-  bucket: R2BucketLike,
+interface ByteSink {
+  readable: ReadableStream<Uint8Array>;
+  writable: WritableStream<Uint8Array>;
+}
+
+/**
+ * Upload sink for the tee. On Workers, single-PUT uploads require a
+ * known-length stream, so a `FixedLengthStream` is used when the size is
+ * known; elsewhere (tests, unknown length) a plain TransformStream.
+ */
+function createUploadSink(knownLength: number | null): ByteSink {
+  if (knownLength !== null) {
+    const fixedLength = (
+      globalThis as { FixedLengthStream?: new (length: number) => ByteSink }
+    ).FixedLengthStream;
+    if (fixedLength) return new fixedLength(knownLength);
+  }
+  return new TransformStream<Uint8Array, Uint8Array>();
+}
+
+/** Stamp a known length onto a stream for workerd R2 PUTs (no-op off-Workers). */
+export function withKnownLength(
+  body: ReadableStream<Uint8Array>,
+  size: number,
+): ReadableStream<Uint8Array> {
+  const fixedLength = (
+    globalThis as { FixedLengthStream?: new (length: number) => ByteSink }
+  ).FixedLengthStream;
+  return fixedLength ? body.pipeThrough(new fixedLength(size)) : body;
+}
+
+async function uploadMultipart(  bucket: R2BucketLike,
   key: string,
   stream: ReadableStream<Uint8Array>,
   partSize: number,
