@@ -189,3 +189,48 @@ describe("file pointer updates (InMemoryMirrorStore semantics)", () => {
     expect((await store.getFile("s_1", "dists/x/Release"))!.current_blob_id).toBe(blob.id);
   });
 });
+
+describe("refcount concurrency semantics (InMemoryMirrorStore)", () => {
+  it("interleaved releases and acquires settle at the arithmetic result, never below zero", async () => {
+    const store = new InMemoryMirrorStore();
+    const blob = existingBlob({ id: "b_race", refcount: 5 });
+    store.blobs.set(blob.id, blob);
+
+    // 5 releases + 3 acquires, all in flight concurrently.
+    await Promise.all([
+      ...Array.from({ length: 5 }, () => store.releaseBlob(blob.id)),
+      ...Array.from({ length: 3 }, () => store.acquireBlob(blob.id)),
+    ]);
+
+    const after = store.blobs.get(blob.id)!;
+    expect(after.refcount).toBe(3);
+    expect(after.status).toBe("active");
+  });
+
+  it("releases never drive the refcount below zero; zero means orphaned", async () => {
+    const store = new InMemoryMirrorStore();
+    const blob = existingBlob({ id: "b_floor", refcount: 2 });
+    store.blobs.set(blob.id, blob);
+
+    await Promise.all(Array.from({ length: 5 }, () => store.releaseBlob(blob.id)));
+
+    const after = store.blobs.get(blob.id)!;
+    expect(after.refcount).toBe(0);
+    expect(after.status).toBe("orphaned");
+  });
+
+  it("an acquire racing a release to zero resurrects the blob (no live orphan)", async () => {
+    const store = new InMemoryMirrorStore();
+    const blob = existingBlob({ id: "b_revive", refcount: 1 });
+    store.blobs.set(blob.id, blob);
+
+    // release -> 0 (orphaned), then acquire -> 1: must come back active.
+    await store.releaseBlob(blob.id);
+    expect(store.blobs.get(blob.id)!.status).toBe("orphaned");
+    await store.acquireBlob(blob.id);
+
+    const after = store.blobs.get(blob.id)!;
+    expect(after.refcount).toBe(1);
+    expect(after.status).toBe("active");
+  });
+});

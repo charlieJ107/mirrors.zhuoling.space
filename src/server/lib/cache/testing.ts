@@ -134,7 +134,13 @@ export class InMemoryMirrorStore implements MirrorStore {
 
   async acquireBlob(id: string): Promise<void> {
     const blob = this.blobs.get(id);
-    if (blob) this.blobs.set(id, { ...blob, refcount: blob.refcount + 1 });
+    if (blob) {
+      this.blobs.set(id, {
+        ...blob,
+        refcount: blob.refcount + 1,
+        status: blob.status === "orphaned" ? "active" : blob.status,
+      });
+    }
   }
 
   async releaseBlob(id: string): Promise<void> {

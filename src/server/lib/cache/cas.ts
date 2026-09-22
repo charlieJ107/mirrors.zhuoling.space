@@ -86,6 +86,12 @@ export async function finalizeCasBlob(
   await copyObject(bucket, input.tmpKey, plan.key);
   await bucket.delete(input.tmpKey);
 
+  // Two concurrent ingests of identical content can both miss the dedup
+  // check above: the loser then fails here on the blobs.sha256 UNIQUE
+  // constraint. That is benign — both wrote the same bytes to the same CAS
+  // key, the loser's tmp is already deleted, and its client already
+  // received the full stream; the rejection surfaces only as a logged
+  // waitUntil error in the route.
   const blob: BlobsTable = {
     id: newBlobId(),
     sha256: input.sha256,

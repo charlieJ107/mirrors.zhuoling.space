@@ -53,21 +53,35 @@ export function createMirrorStore(db: Kysely<Database>): MirrorStore {
     },
 
     async acquireBlob(id) {
+      // Single atomic UPDATE; resurrects an orphaned blob that is being
+      // referenced again (a premature refcount=0 must not leave a live blob
+      // marked for the gc workflow).
       await db
         .updateTable("blobs")
-        .set({ refcount: sql`refcount + 1` })
+        .set({
+          refcount: sql`refcount + 1`,
+          status: sql`case when status = 'orphaned' then 'active' else status end`,
+        })
         .where("id", "=", id)
         .execute();
     },
 
     async releaseBlob(id) {
-      const blob = await store.getBlobById(id);
-      if (!blob) return;
-      const next = Math.max(0, blob.refcount - 1);
+      // Atomic decrement + conditional orphan marking: no read-modify-write,
+      // so concurrent release/acquire interleavings cannot produce a
+      // premature refcount=0 (a blob a file still points at must never
+      // become 'orphaned' — the gc workflow would delete live bytes).
       await db
         .updateTable("blobs")
-        .set({ refcount: next, status: next === 0 ? "orphaned" : blob.status })
+        .set({ refcount: sql`max(0, refcount - 1)` })
         .where("id", "=", id)
+        .execute();
+      await db
+        .updateTable("blobs")
+        .set({ status: "orphaned" })
+        .where("id", "=", id)
+        .where("refcount", "=", 0)
+        .where("status", "!=", "orphaned")
         .execute();
     },
 
