@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import meApp from "./me";
+import { createMirrorApp } from "./routes/mirror";
 import type { AppHonoEnv } from "@server/env";
 import { messageListResponseSchema } from "@shared/dto/messages";
 
@@ -13,6 +14,9 @@ app.onError((err, c) => {
 app.on(["POST", "GET"], "/api/auth/*", (c) => c.var.app.auth.handler(c.req.raw));
 
 app.route("/api/me", meApp);
+
+// Lazy mirror data plane (issue #3): /s/{sourceId}/*.
+app.route("/", createMirrorApp());
 
 app.get("/api/health", (c) => c.json({ status: "ok" }));
 app.get("/api/messages", (c) => c.json(messageListResponseSchema.parse({
