@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.57.2",
+    "@cloudflare/vitest-plugin": "^1.2.3",
     "@cloudflare/workers-types": "^5.20260922.1",
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^9.6.0",
@@ -71,7 +72,7 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.1",
     "vite": "^8.3.0",
-    "vitest": "^5.0.1",
+    "vitest": "^4.1.0",
     "wrangler": "^4.136.2"
   }
 }
