@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import meApp from "./me";
 import type { AppHonoEnv } from "@server/env";
+import { guardApiWrites } from "@server/lib/require-auth";
 import { messageListResponseSchema } from "@shared/dto/messages";
 
 const app = new Hono<AppHonoEnv>();
@@ -9,6 +10,11 @@ app.onError((err, c) => {
     console.error("Unhandled error:", err);
     return c.json({ code: "INTERNAL_ERROR", message: "Internal server error" }, 500);
 });
+
+// All /api/* write endpoints require an authenticated session (issue #5).
+// Registered before routes so unauthenticated writes never reach handlers and
+// cannot distinguish existing from non-existing resources.
+app.use("/api/*", guardApiWrites);
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => c.var.app.auth.handler(c.req.raw));
 

@@ -1,6 +1,11 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
 import type { AppConfig } from "@server/env";
 
+export const OIDC_PROVIDER_ID = "zhuoling";
+
+export const DEFAULT_OIDC_DISCOVERY_URL =
+  "https://auth.zhuoling.space/.well-known/openid-configuration";
 
 /**
  * Shared options for Better Auth used by both:
@@ -8,6 +13,10 @@ import type { AppConfig } from "@server/env";
  * - CLI (generate/migrate): better-auth.config.ts with local SQLite
  *
  * Only `database` and runtime env (secret, baseURL) differ; the rest stays in sync here.
+ *
+ * The console authenticates exclusively via OIDC against auth.zhuoling.space
+ * (ADR-5). Local email/password credentials are disabled: identity is owned by
+ * the identity provider, and accounts are provisioned on first OIDC sign-in.
  */
 export function createAuthOptions(
   database: BetterAuthOptions["database"],
@@ -22,8 +31,32 @@ export function createAuthOptions(
     },
     database,
     emailAndPassword: {
-      enabled: true,
+      enabled: false,
     },
+    advanced: {
+      database: {
+        // Runtime schema validation introspects sqlite_master, which D1
+        // rejects (SQLITE_AUTH). Schema correctness is enforced by the
+        // migrations instead.
+        validateSchema: false,
+      },
+    },
+    plugins: [
+      genericOAuth({
+        config: [
+          {
+            providerId: OIDC_PROVIDER_ID,
+            clientId: config.BETTER_AUTH_OIDC_CLIENT_ID,
+            clientSecret: config.BETTER_AUTH_OIDC_CLIENT_SECRET,
+            discoveryUrl:
+              config.BETTER_AUTH_OIDC_DISCOVERY_URL?.trim() || DEFAULT_OIDC_DISCOVERY_URL,
+            scopes: ["openid", "profile", "email"],
+            // Keep the local profile in sync with the identity provider.
+            overrideUserInfo: true,
+          },
+        ],
+      }),
+    ],
   } satisfies BetterAuthOptions;
 }
 

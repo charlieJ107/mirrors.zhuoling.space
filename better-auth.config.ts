@@ -15,6 +15,8 @@ const auth = betterAuth(
         BETTER_AUTH_SECRET: "cli-placeholder-for-schema-generation",
         BETTER_AUTH_URL: "http://localhost:8787",
         BETTER_AUTH_ALLOWED_HOSTS: "",
+        BETTER_AUTH_OIDC_CLIENT_ID: "cli-placeholder-client-id",
+        BETTER_AUTH_OIDC_CLIENT_SECRET: "cli-placeholder-client-secret",
     })
 );
 

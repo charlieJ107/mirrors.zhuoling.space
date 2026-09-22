@@ -11,11 +11,8 @@ export default function Index() {
                     <div className="flex items-center justify-between">
                         <h1 className="text-2xl font-bold">Full-Stack Template</h1>
                         <div className="flex gap-2">
-                            <Button variant="outline" asChild>
-                                <Link to="/sign-in">Sign In</Link>
-                            </Button>
                             <Button asChild>
-                                <Link to="/sign-up">Sign Up</Link>
+                                <Link to="/sign-in">Sign In</Link>
                             </Button>
                         </div>
                     </div>
@@ -43,7 +40,7 @@ export default function Index() {
                         <CardHeader>
                             <Users className="h-10 w-10 text-primary mb-2" />
                             <CardTitle>Authentication</CardTitle>
-                            <CardDescription>Email/password auth using Better Auth.</CardDescription>
+                            <CardDescription>OIDC sign-in via auth.zhuoling.space.</CardDescription>
                         </CardHeader>
                     </Card>
 
@@ -58,7 +55,7 @@ export default function Index() {
 
                 <div className="text-center mt-12">
                     <Button size="lg" asChild>
-                        <Link to="/sign-up">Get Started</Link>
+                        <Link to="/sign-in">Get Started</Link>
                     </Button>
                 </div>
             </div>
