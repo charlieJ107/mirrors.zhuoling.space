@@ -1,6 +1,9 @@
 import { D1Dialect } from "@server/lib/data/kysely-d1";
+import { createDb } from "@server/lib/data/db";
+import { createMirrorStore } from "@server/lib/cache/store";
 import { createAuth, createAuthOptions } from "@server/lib/auth";
 import { UnsupportedObjectStorage } from "@server/lib/blob";
+import type { R2BucketLike } from "@server/lib/cache/r2-types";
 import type { AppConfig, AppRuntime } from "@server/env";
 
 export function createAppRuntimeFromCloudflare(env: Env): AppRuntime {
@@ -20,6 +23,18 @@ export function createAppRuntimeFromCloudflare(env: Env): AppRuntime {
     config,
     auth,
     blob: new UnsupportedObjectStorage(),
+    mirror: {
+      store: createMirrorStore(createDb(env.DB)),
+      // R2Bucket's overloaded `get` is not structurally assignable to the
+      // narrower R2BucketLike; the subset the data plane uses is compatible.
+      buckets: {
+        "mirror-hot": env.MIRROR_HOT as R2BucketLike,
+        "mirror-cold": env.MIRROR_COLD as R2BucketLike,
+        "robot-apt": env.ROBOT_APT as R2BucketLike,
+      },
+      hotBucketName: "mirror-hot",
+      analytics: env.MIRROR_ANALYTICS,
+    },
   };
 }
 
