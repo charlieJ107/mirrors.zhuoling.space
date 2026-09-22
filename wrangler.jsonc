@@ -31,5 +31,53 @@
 			"database_id": "00000000-0000-0000-0000-000000000000",
 			"migrations_dir": "migrations/d1"
 		}
+	],
+	// Bucket layout per docs/03-adr.md ADR-10: managed objects live in
+	// mirror-hot / mirror-cold; robot-apt is a read-only-by-convention mount
+	// of the existing external aptly bucket.
+	"r2_buckets": [
+		{
+			"binding": "MIRROR_HOT",
+			"bucket_name": "mirror-hot"
+		},
+		{
+			"binding": "MIRROR_COLD",
+			"bucket_name": "mirror-cold"
+		},
+		{
+			"binding": "ROBOT_APT",
+			"bucket_name": "robot-apt"
+		}
+	],
+	// Background jobs per docs/02-architecture.md §2.6. Entrypoint classes are
+	// stubs for now; real logic lands in later issues.
+	"workflows": [
+		{
+			"binding": "INGEST_WORKFLOW",
+			"name": "ingest-workflow",
+			"class_name": "IngestWorkflow"
+		},
+		{
+			"binding": "VERIFY_WORKFLOW",
+			"name": "verify-workflow",
+			"class_name": "VerifyWorkflow"
+		},
+		{
+			"binding": "TIER_WORKFLOW",
+			"name": "tier-workflow",
+			"class_name": "TierWorkflow"
+		},
+		{
+			"binding": "GC_WORKFLOW",
+			"name": "gc-workflow",
+			"class_name": "GcWorkflow"
+		}
+	],
+	// Full-volume request metrics for the dashboard (hit rate, bandwidth, Top N).
+	"analytics_engine_datasets": [
+		{
+			"binding": "MIRROR_ANALYTICS",
+			"dataset": "mirror_analytics"
+		}
 	]
 }
