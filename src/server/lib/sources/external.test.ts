@@ -1,14 +1,21 @@
-import { describe, it, expect } from "vitest";
-import { createTestDb } from "@server/lib/data/test-db";
+import { describe, it, expect, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
+import { createDb } from "@server/lib/data/db";
 import {
   ensureExternalAptlySource,
   EXTERNAL_APTLY_PREFIXES,
   EXTERNAL_APTLY_SOURCE_ID,
 } from "@server/lib/sources/external";
 import { isWriteAllowed } from "@server/lib/storage/write-prefix";
+import { resetStorage } from "@server/lib/testing/reset-storage";
+
+// Runs in the workers pool: env.DB is a real D1 binding (local emulation)
+// with the migrations from migrations/d1 applied (see vitest.workers.config.ts).
+
+beforeEach(resetStorage);
 
 function setup() {
-  return createTestDb();
+  return createDb(env.DB);
 }
 
 describe("ensureExternalAptlySource", () => {

@@ -1,57 +1,19 @@
-import { describe, it, expect } from "vitest";
-import { createTestDb } from "@server/lib/data/test-db";
+import { describe, it, expect, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
+import { createDb } from "@server/lib/data/db";
 import {
   ensureExternalAptlySource,
   EXTERNAL_APTLY_BUCKET,
   EXTERNAL_APTLY_SOURCE_ID,
 } from "@server/lib/sources/external";
 import { scanExternalAptlyBucket } from "@server/lib/scanner/external-scan";
+import { resetStorage } from "@server/lib/testing/reset-storage";
 
-/** In-memory R2Bucket fake implementing R2 list() pagination semantics. */
-class FakeR2Bucket {
-  private objects = new Map<
-    string,
-    { size: number; etag: string; uploaded: Date }
-  >();
-  listCalls: Array<{ prefix?: string; cursor?: string; limit?: number }> = [];
+// Runs in the workers pool: env.DB / env.ROBOT_APT are real D1/R2 bindings
+// backed by local emulation (see vitest.workers.config.ts). Objects are
+// seeded through the real R2 binding's put().
 
-  seed(
-    key: string,
-    size: number,
-    etag = `etag-${key}`,
-    uploaded = new Date("2026-01-01T00:00:00.000Z"),
-  ) {
-    this.objects.set(key, { size, etag, uploaded });
-  }
-
-  remove(key: string) {
-    this.objects.delete(key);
-  }
-
-  async list(options?: R2ListOptions): Promise<R2Objects> {
-    this.listCalls.push({
-      prefix: options?.prefix,
-      cursor: options?.cursor,
-      limit: options?.limit,
-    });
-    const prefix = options?.prefix ?? "";
-    const limit = options?.limit ?? 1000;
-    const keys = [...this.objects.keys()]
-      .filter((k) => k.startsWith(prefix))
-      .sort();
-    const start = options?.cursor ? Number(options.cursor) : 0;
-    const pageKeys = keys.slice(start, start + limit);
-    const truncated = start + limit < keys.length;
-    return {
-      objects: pageKeys.map(
-        (key) => ({ key, ...this.objects.get(key)! }) as unknown as R2Object,
-      ),
-      truncated,
-      cursor: truncated ? String(start + limit) : undefined,
-      delimitedPrefixes: [],
-    } as unknown as R2Objects;
-  }
-}
+beforeEach(resetStorage);
 
 const SEED: Array<[string, number]> = [
   ["ros/dists/noetic/Release", 1200],
@@ -60,21 +22,22 @@ const SEED: Array<[string, number]> = [
   ["blobs/sha256/ab/abcdef0123", 999],
 ];
 
+async function seed(key: string, size: number): Promise<void> {
+  await env.ROBOT_APT.put(key, "x".repeat(size));
+}
+
 async function setup() {
-  const db = createTestDb();
+  const db = createDb(env.DB);
   await ensureExternalAptlySource(db);
-  const bucket = new FakeR2Bucket();
-  for (const [key, size] of SEED) bucket.seed(key, size);
-  return { db, bucket };
+  for (const [key, size] of SEED) await seed(key, size);
+  return { db, bucket: env.ROBOT_APT };
 }
 
 describe("scanExternalAptlyBucket", () => {
   it("materializes files/blobs rows for objects under the aptly prefixes", async () => {
     const { db, bucket } = await setup();
 
-    const result = await scanExternalAptlyBucket(db, bucket as unknown as R2Bucket, {
-      now: () => new Date("2026-09-22T00:00:00.000Z"),
-    });
+    const result = await scanExternalAptlyBucket(db, bucket);
 
     expect(result.complete).toBe(true);
     expect(result.listedObjects).toBe(SEED.length);
@@ -93,8 +56,9 @@ describe("scanExternalAptlyBucket", () => {
       expect(file.state).toBe("present");
       expect(file.pinned).toBe(1);
       expect(file.current_blob_id).not.toBeNull();
-      expect(file.upstream_etag).toBe(`etag-${file.path}`);
-      expect(file.upstream_last_modified).toBe("2026-01-01T00:00:00.000Z");
+      // Real R2 etag (MD5 hex for single-part uploads) and upload time.
+      expect(file.upstream_etag).toMatch(/^[0-9a-f]{32}$/);
+      expect(Number.isNaN(Date.parse(file.upstream_last_modified!))).toBe(false);
     }
 
     const blobs = await db.selectFrom("blobs").selectAll().execute();
@@ -106,9 +70,9 @@ describe("scanExternalAptlyBucket", () => {
       expect(blob.verify_status).toBe("unverified");
       expect(blob.refcount).toBe(1);
       expect(blob.status).toBe("active");
-      const seed = SEED.find(([k]) => k === blob.r2_key);
-      expect(seed).toBeDefined();
-      expect(blob.size).toBe(seed![1]);
+      const seedEntry = SEED.find(([k]) => k === blob.r2_key);
+      expect(seedEntry).toBeDefined();
+      expect(blob.size).toBe(seedEntry![1]);
     }
 
     // files -> blobs mapping resolves to the real r2_key.
@@ -120,9 +84,9 @@ describe("scanExternalAptlyBucket", () => {
 
   it("ignores objects outside the aptly prefixes", async () => {
     const { db, bucket } = await setup();
-    bucket.seed("other/random-object", 1);
+    await seed("other/random-object", 1);
 
-    const result = await scanExternalAptlyBucket(db, bucket as unknown as R2Bucket);
+    const result = await scanExternalAptlyBucket(db, bucket);
     expect(result.listedObjects).toBe(SEED.length);
     const files = await db.selectFrom("files").selectAll().execute();
     expect(files).toHaveLength(SEED.length);
@@ -130,9 +94,8 @@ describe("scanExternalAptlyBucket", () => {
 
   it("is idempotent: re-running updates in place without duplicating rows", async () => {
     const { db, bucket } = await setup();
-    const b = bucket as unknown as R2Bucket;
 
-    const first = await scanExternalAptlyBucket(db, b);
+    const first = await scanExternalAptlyBucket(db, bucket);
     const fileIdsBefore = (
       await db.selectFrom("files").select("id").execute()
     ).map((r) => r.id);
@@ -140,7 +103,7 @@ describe("scanExternalAptlyBucket", () => {
       await db.selectFrom("blobs").select("id").execute()
     ).map((r) => r.id);
 
-    const second = await scanExternalAptlyBucket(db, b);
+    const second = await scanExternalAptlyBucket(db, bucket);
     expect(second.filesCreated).toBe(0);
     expect(second.blobsCreated).toBe(0);
     expect(second.filesUpdated).toBe(SEED.length);
@@ -162,11 +125,10 @@ describe("scanExternalAptlyBucket", () => {
 
   it("marks rows whose objects vanished as missing, and revives reappearing ones", async () => {
     const { db, bucket } = await setup();
-    const b = bucket as unknown as R2Bucket;
-    await scanExternalAptlyBucket(db, b);
+    await scanExternalAptlyBucket(db, bucket);
 
-    bucket.remove("ros/pool/main/r/pkg/pkg_1.0_amd64.deb");
-    const second = await scanExternalAptlyBucket(db, b);
+    await bucket.delete("ros/pool/main/r/pkg/pkg_1.0_amd64.deb");
+    const second = await scanExternalAptlyBucket(db, bucket);
     expect(second.missingFiles).toBe(1);
     expect(second.listedObjects).toBe(SEED.length - 1);
 
@@ -185,8 +147,8 @@ describe("scanExternalAptlyBucket", () => {
     expect(blob.r2_key).toBe("ros/pool/main/r/pkg/pkg_1.0_amd64.deb");
 
     // Object reappears -> file flips back to present on the next scan.
-    bucket.seed("ros/pool/main/r/pkg/pkg_1.0_amd64.deb", 54321);
-    const third = await scanExternalAptlyBucket(db, b);
+    await seed("ros/pool/main/r/pkg/pkg_1.0_amd64.deb", 54321);
+    const third = await scanExternalAptlyBucket(db, bucket);
     expect(third.missingFiles).toBe(0);
     const revived = await db
       .selectFrom("files")
@@ -198,20 +160,14 @@ describe("scanExternalAptlyBucket", () => {
 
   it("paginates list() until each prefix is exhausted", async () => {
     const { db, bucket } = await setup();
-    bucket.seed("ros/extra-1", 1);
-    bucket.seed("ros/extra-2", 2);
-    bucket.seed("ros/extra-3", 3);
+    await seed("ros/extra-1", 1);
+    await seed("ros/extra-2", 2);
+    await seed("ros/extra-3", 3);
 
-    const result = await scanExternalAptlyBucket(db, bucket as unknown as R2Bucket, {
-      pageSize: 2,
-    });
+    const result = await scanExternalAptlyBucket(db, bucket, { pageSize: 2 });
     expect(result.complete).toBe(true);
     // ros/ has 5 objects -> 3 pages; ubuntu/ 1 object -> 1 page; blobs/ 1 -> 1 page.
     expect(result.listPages).toBe(5);
-    const rosCalls = bucket.listCalls.filter((c) => c.prefix === "ros/");
-    expect(rosCalls).toHaveLength(3);
-    expect(rosCalls.every((c) => c.limit === 2)).toBe(true);
-    expect(rosCalls[1].cursor).toBeDefined();
     expect(
       await db.selectFrom("files").selectAll().execute(),
     ).toHaveLength(SEED.length + 3);
@@ -219,9 +175,8 @@ describe("scanExternalAptlyBucket", () => {
 
   it("is resumable: a page-limited run returns a cursor the next run continues from", async () => {
     const { db, bucket } = await setup();
-    const b = bucket as unknown as R2Bucket;
 
-    const first = await scanExternalAptlyBucket(db, b, { pageSize: 2, pageLimit: 1 });
+    const first = await scanExternalAptlyBucket(db, bucket, { pageSize: 2, pageLimit: 1 });
     expect(first.complete).toBe(false);
     expect(first.resumeFrom).not.toBeNull();
 
@@ -229,7 +184,7 @@ describe("scanExternalAptlyBucket", () => {
     let last = first;
     while (!last.complete) {
       expect(resume).not.toBeNull();
-      last = await scanExternalAptlyBucket(db, b, {
+      last = await scanExternalAptlyBucket(db, bucket, {
         pageSize: 2,
         pageLimit: 1,
         resumeFrom: resume!,
@@ -245,8 +200,7 @@ describe("scanExternalAptlyBucket", () => {
 
   it("a re-scan does not clobber verification results", async () => {
     const { db, bucket } = await setup();
-    const b = bucket as unknown as R2Bucket;
-    await scanExternalAptlyBucket(db, b);
+    await scanExternalAptlyBucket(db, bucket);
 
     // Simulate the verify workflow having hashed one object.
     await db
@@ -259,7 +213,7 @@ describe("scanExternalAptlyBucket", () => {
       .where("r2_key", "=", "ubuntu/dists/jammy/InRelease")
       .execute();
 
-    await scanExternalAptlyBucket(db, b);
+    await scanExternalAptlyBucket(db, bucket);
     const blob = await db
       .selectFrom("blobs")
       .selectAll()
@@ -272,8 +226,7 @@ describe("scanExternalAptlyBucket", () => {
 
   it("voids verification when an object's size changes under the same key", async () => {
     const { db, bucket } = await setup();
-    const b = bucket as unknown as R2Bucket;
-    await scanExternalAptlyBucket(db, b);
+    await scanExternalAptlyBucket(db, bucket);
 
     // Simulate the verify workflow having hashed one object.
     await db
@@ -287,8 +240,8 @@ describe("scanExternalAptlyBucket", () => {
       .execute();
 
     // The object is replaced with different bytes under the same key.
-    bucket.seed("ros/dists/noetic/Release", 7777);
-    await scanExternalAptlyBucket(db, b);
+    await seed("ros/dists/noetic/Release", 7777);
+    await scanExternalAptlyBucket(db, bucket);
 
     const blob = await db
       .selectFrom("blobs")
@@ -306,7 +259,7 @@ describe("scanExternalAptlyBucket", () => {
   it("rejects a resume cursor for an unknown prefix", async () => {
     const { db, bucket } = await setup();
     await expect(
-      scanExternalAptlyBucket(db, bucket as unknown as R2Bucket, {
+      scanExternalAptlyBucket(db, bucket, {
         resumeFrom: { prefix: "nope/" },
       }),
     ).rejects.toThrow(/not in the scan prefix list/);
