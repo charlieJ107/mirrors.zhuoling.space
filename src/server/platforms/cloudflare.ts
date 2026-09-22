@@ -24,11 +24,17 @@ export function createAppRuntimeFromCloudflare(env: Env): AppRuntime {
 }
 
 function createAppConfigFromCloudflare(env: Env): AppConfig {
-  const optionalEnv = env as Env & { BETTER_AUTH_ALLOWED_HOSTS?: string };
+  const optionalEnv = env as Env & {
+    BETTER_AUTH_ALLOWED_HOSTS?: string;
+    BETTER_AUTH_OIDC_DISCOVERY_URL?: string;
+  };
 
   return {
     BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: env.BETTER_AUTH_URL,
     BETTER_AUTH_ALLOWED_HOSTS: optionalEnv.BETTER_AUTH_ALLOWED_HOSTS ?? "",
+    BETTER_AUTH_OIDC_CLIENT_ID: env.BETTER_AUTH_OIDC_CLIENT_ID,
+    BETTER_AUTH_OIDC_CLIENT_SECRET: env.BETTER_AUTH_OIDC_CLIENT_SECRET,
+    BETTER_AUTH_OIDC_DISCOVERY_URL: optionalEnv.BETTER_AUTH_OIDC_DISCOVERY_URL,
   };
 }

@@ -70,6 +70,8 @@ Use `.dev.vars` for Cloudflare local development and `.env` for Node, Docker, an
 BETTER_AUTH_SECRET=your-32-plus-character-random-secret
 BETTER_AUTH_URL=http://localhost:8787
 BETTER_AUTH_ALLOWED_HOSTS=""
+BETTER_AUTH_OIDC_CLIENT_ID=mirrors-zhuoling-space
+BETTER_AUTH_OIDC_CLIENT_SECRET=secret-from-the-identity-provider
 ```
 
 Generate a secret with:
@@ -77,6 +79,12 @@ Generate a secret with:
 ```bash
 openssl rand -base64 32
 ```
+
+Authentication is OIDC against `auth.zhuoling.space` (Better Auth `genericOAuth` plugin, ADR-5).
+`BETTER_AUTH_OIDC_CLIENT_ID` / `BETTER_AUTH_OIDC_CLIENT_SECRET` come from the client registration
+at the identity provider; its redirect URI is `<BETTER_AUTH_URL>/api/auth/callback/zhuoling`.
+`BETTER_AUTH_OIDC_DISCOVERY_URL` is optional and defaults to
+`https://auth.zhuoling.space/.well-known/openid-configuration`.
 
 Create a D1 database and update `wrangler.jsonc`:
 
@@ -105,8 +113,7 @@ Open the URL printed by Vite/Wrangler. With the default Cloudflare dev setup thi
 ## Routes
 
 - `/` - public landing page
-- `/sign-up` - create an account
-- `/sign-in` - sign in
+- `/sign-in` - sign in (redirects to auth.zhuoling.space)
 - `/dashboard` - protected dashboard
 - `/messages` - protected page that calls `/api/messages`
 
@@ -115,7 +122,10 @@ Open the URL printed by Vite/Wrangler. With the default Cloudflare dev setup thi
 - `GET /api/health` - health check
 - `GET /api/messages` - example response validated with `@shared/dto/messages`
 - `GET /api/me` - current authenticated user, or 401
-- `GET|POST /api/auth/*` - Better Auth endpoints
+- `GET|POST /api/auth/*` - Better Auth endpoints (OIDC sign-in flow)
+
+Write methods (POST/PUT/PATCH/DELETE) on any other `/api/*` path require a valid
+session and return 401 without one, before route matching.
 
 ## Shared DTO Pattern
 
@@ -185,6 +195,8 @@ Production Worker secrets:
 BETTER_AUTH_SECRET
 BETTER_AUTH_URL
 BETTER_AUTH_ALLOWED_HOSTS
+BETTER_AUTH_OIDC_CLIENT_ID
+BETTER_AUTH_OIDC_CLIENT_SECRET
 ```
 
 ### Node
@@ -208,10 +220,13 @@ DATABASE_URL
 BETTER_AUTH_SECRET
 BETTER_AUTH_URL
 BETTER_AUTH_ALLOWED_HOSTS
+BETTER_AUTH_OIDC_CLIENT_ID
+BETTER_AUTH_OIDC_CLIENT_SECRET
+BETTER_AUTH_OIDC_DISCOVERY_URL
 PORT
 ```
 
-`PORT` is optional and defaults to `3000`.
+`BETTER_AUTH_OIDC_DISCOVERY_URL` and `PORT` are optional; `PORT` defaults to `3000`.
 
 Docker:
 
