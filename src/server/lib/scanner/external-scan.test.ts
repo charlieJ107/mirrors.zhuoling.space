@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createDb } from "@server/lib/data/db";
-import { createFakeD1 } from "@server/lib/data/fake-d1";
+import { createTestDb } from "@server/lib/data/test-db";
 import {
   ensureExternalAptlySource,
   EXTERNAL_APTLY_BUCKET,
@@ -62,7 +61,7 @@ const SEED: Array<[string, number]> = [
 ];
 
 async function setup() {
-  const db = createDb(createFakeD1());
+  const db = createTestDb();
   await ensureExternalAptlySource(db);
   const bucket = new FakeR2Bucket();
   for (const [key, size] of SEED) bucket.seed(key, size);

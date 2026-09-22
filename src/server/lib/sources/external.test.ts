@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createDb } from "@server/lib/data/db";
-import { createFakeD1 } from "@server/lib/data/fake-d1";
+import { createTestDb } from "@server/lib/data/test-db";
 import {
   ensureExternalAptlySource,
   EXTERNAL_APTLY_PREFIXES,
@@ -9,7 +8,7 @@ import {
 import { isWriteAllowed } from "@server/lib/storage/write-prefix";
 
 function setup() {
-  return createDb(createFakeD1());
+  return createTestDb();
 }
 
 describe("ensureExternalAptlySource", () => {
