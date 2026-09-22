@@ -21,7 +21,7 @@ export const EXTERNAL_APTLY_BUCKET = "robot-apt";
 /** aptly-published prefixes inside the bucket; all read-only. */
 export const EXTERNAL_APTLY_PREFIXES = ["ros/", "ubuntu/", "blobs/"] as const;
 
-function aptlySourceRow(now: string) {
+function aptlySourceRow() {
   return {
     id: EXTERNAL_APTLY_SOURCE_ID,
     name: EXTERNAL_APTLY_SOURCE_NAME,
@@ -48,7 +48,7 @@ export async function ensureExternalAptlySource(
   now: Date = new Date(),
 ): Promise<SourcesTable> {
   const nowIso = now.toISOString();
-  const row = aptlySourceRow(nowIso);
+  const row = aptlySourceRow();
 
   await db
     .insertInto("sources")

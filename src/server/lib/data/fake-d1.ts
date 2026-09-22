@@ -20,11 +20,15 @@ const MIGRATIONS_DIR = path.resolve(import.meta.dirname, "../../../../migrations
 const READ_RE = /^\s*(select|with|pragma|explain)\b/i;
 
 class FakeD1PreparedStatement {
-  constructor(
-    private readonly db: DatabaseSync,
-    private readonly sql: string,
-    private readonly params: unknown[] = [],
-  ) {}
+  private readonly db: DatabaseSync;
+  private readonly sql: string;
+  private readonly params: unknown[];
+
+  constructor(db: DatabaseSync, sql: string, params: unknown[] = []) {
+    this.db = db;
+    this.sql = sql;
+    this.params = params;
+  }
 
   bind(...values: unknown[]): D1PreparedStatement {
     return new FakeD1PreparedStatement(this.db, this.sql, values) as unknown as D1PreparedStatement;
@@ -56,7 +60,11 @@ class FakeD1PreparedStatement {
 }
 
 class FakeD1Database {
-  constructor(private readonly db: DatabaseSync) {}
+  private readonly db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.db = db;
+  }
 
   prepare(sql: string): D1PreparedStatement {
     return new FakeD1PreparedStatement(this.db, sql) as unknown as D1PreparedStatement;
