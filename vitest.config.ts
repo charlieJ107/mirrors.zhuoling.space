@@ -4,6 +4,11 @@ import path from "node:path";
 export default defineConfig({
   resolve: {
     alias: {
+      // workerd-only module; stubbed so worker-entry tests run under Node.
+      "cloudflare:workers": path.resolve(
+        import.meta.dirname,
+        "src/server/lib/testing/cloudflare-workers-stub.ts",
+      ),
       "@": path.resolve(import.meta.dirname, "src"),
       "@client": path.resolve(import.meta.dirname, "src/client"),
       "@server": path.resolve(import.meta.dirname, "src/server"),

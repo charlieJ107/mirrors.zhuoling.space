@@ -18,11 +18,19 @@ const handler = new Hono<CloudflareHonoEnv>()
   })
   // Temporary internal entry point for the external aptly scanner (issue #7).
   // The real control-plane trigger is issue #6 and auth is issue #5; until
-  // then this is optionally gated by an INTERNAL_SCAN_TOKEN secret.
+  // then this endpoint is fail-closed: with no INTERNAL_SCAN_TOKEN secret
+  // configured it is disabled (403); when configured, callers must present
+  // it as a Bearer token.
   .post("/api/internal/scan-external", async (c) => {
     const token = (c.env as Env & { INTERNAL_SCAN_TOKEN?: string })
       .INTERNAL_SCAN_TOKEN;
-    if (token && c.req.header("authorization") !== `Bearer ${token}`) {
+    if (!token) {
+      return c.json(
+        { code: "FORBIDDEN", message: "Internal scan endpoint is disabled" },
+        403,
+      );
+    }
+    if (c.req.header("authorization") !== `Bearer ${token}`) {
       return c.json({ code: "UNAUTHORIZED", message: "Invalid internal token" }, 401);
     }
     const db = createDb(c.env.DB);

@@ -271,6 +271,39 @@ describe("scanExternalAptlyBucket", () => {
     expect(blob.verified_at).toBe("2026-09-01T00:00:00.000Z");
   });
 
+  it("voids verification when an object's size changes under the same key", async () => {
+    const { db, bucket } = await setup();
+    const b = bucket as unknown as R2Bucket;
+    await scanExternalAptlyBucket(db, b);
+
+    // Simulate the verify workflow having hashed one object.
+    await db
+      .updateTable("blobs")
+      .set({
+        sha256: "c".repeat(64),
+        verify_status: "ok",
+        verified_at: "2026-09-01T00:00:00.000Z",
+      })
+      .where("r2_key", "=", "ros/dists/noetic/Release")
+      .execute();
+
+    // The object is replaced with different bytes under the same key.
+    bucket.seed("ros/dists/noetic/Release", 7777);
+    await scanExternalAptlyBucket(db, b);
+
+    const blob = await db
+      .selectFrom("blobs")
+      .selectAll()
+      .where("r2_key", "=", "ros/dists/noetic/Release")
+      .executeTakeFirstOrThrow();
+    expect(blob.size).toBe(7777);
+    // The verified bytes are gone: the stored hash must not keep claiming
+    // to describe the object.
+    expect(blob.verify_status).toBe("unverified");
+    expect(blob.sha256).toBeNull();
+    expect(blob.verified_at).toBeNull();
+  });
+
   it("rejects a resume cursor for an unknown prefix", async () => {
     const { db, bucket } = await setup();
     await expect(

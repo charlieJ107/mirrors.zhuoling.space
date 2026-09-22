@@ -28,6 +28,9 @@ import {
  * all of the source's files `missing` and un-marks them as objects are
  * listed, so rows whose objects vanished from the bucket end the scan as
  * state=missing — and an interrupted scan self-heals on the next run.
+ * Verification results survive re-scans, except when an object's size
+ * changed under the same key: the verified bytes are gone, so the blob is
+ * reset to sha256=NULL / verify_status=unverified.
  */
 
 export interface ScanCursor {
@@ -169,7 +172,7 @@ async function upsertObject(
 
   const existingBlob = await db
     .selectFrom("blobs")
-    .select("id")
+    .select(["id", "size"])
     .where("bucket", "=", EXTERNAL_APTLY_BUCKET)
     .where("r2_key", "=", object.key)
     .where("tier", "=", "external")
@@ -180,11 +183,26 @@ async function upsertObject(
   if (existingBlob) {
     // Never clobber sha256/verify_status: the verify workflow may already
     // have filled them; a re-scan only refreshes the listing facts.
-    await db
-      .updateTable("blobs")
-      .set({ size: object.size })
-      .where("id", "=", existingBlob.id)
-      .execute();
+    if (existingBlob.size !== object.size) {
+      // The object was replaced under the same key — the verified bytes are
+      // no longer what is there, so any previous verification is void.
+      await db
+        .updateTable("blobs")
+        .set({
+          size: object.size,
+          sha256: null,
+          verified_at: null,
+          verify_status: "unverified",
+        })
+        .where("id", "=", existingBlob.id)
+        .execute();
+    } else {
+      await db
+        .updateTable("blobs")
+        .set({ size: object.size })
+        .where("id", "=", existingBlob.id)
+        .execute();
+    }
     blobId = existingBlob.id;
   } else {
     blobId = newBlobId();
